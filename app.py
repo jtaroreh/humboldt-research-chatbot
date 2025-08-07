@@ -75,6 +75,7 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                 response = bedrock.retrieve_and_generate(
                     input={
                         'text': (
+<<<<<<< HEAD
                             f"""CHAT HISTORY: {chat_history_embeddings}\n
                             You are a helpful assistant. Be conversational and overly friendly. 
                             At the end of the response, please provide the user with however many suggestions to elicit more actionable replies that relevant to the original query.
@@ -98,6 +99,21 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                             -Like a university help desk that knows exactly where everything is.
 
                             \nUser question: {prompt}"""
+=======
+                            f"CHAT HISTORY: {chat_history_embeddings}\n"
+                            "You are a helpful assistant. Be conversational and overly friendly. "
+                            #"At the end of the response, please ask the user if they have any other questions."
+                            "Always respond in clear, concise sentences. "
+                            #"At the end of the response, ask if the answers provided solved the user's query. "
+                            "Acknowledge the question, and reiterate the user's question in your response. "
+                            "In your response, break down the steps to solve the user's problem in a structured step by step workflow"
+                            "If the user asks more than one question, please ask the user to prioritize the most important question and to answer that one first"
+                            "If the user asks a question that does not produce a precise result which can be broken down into steps to accomplish, provide a prompt that would provide a more useful result. "
+                            "Never give broad summaries of topics. Instead, route users to specific destinations."
+                            "When you use information from the knowledge base, cite it at the end.\n\n"
+                            "Suggest alternate contact details if applicable."
+                            f"User question: {prompt}"
+>>>>>>> b28ca9b (v1 with memory and prompt)
                         )
                     },
                     retrieveAndGenerateConfiguration={
