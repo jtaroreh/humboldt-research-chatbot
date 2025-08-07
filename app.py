@@ -134,3 +134,4 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
   
             except Exception as e:
                 st.error(f"Error: {e}")
+#.
