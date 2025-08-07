@@ -3,12 +3,12 @@ import boto3
 import os
 import hashlib
 import numpy as np
+import uuid
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-
 
 # Setup
 st.set_page_config(page_title="Simple RAG Chatbot", page_icon="🤖")
@@ -19,6 +19,16 @@ st.title("Simple RAG Chatbot")
 def setup_bedrock():
     return boto3.client(
         'bedrock-agent-runtime',
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        aws_session_token=os.getenv('AWS_SESSION_TOKEN'),
+        region_name=os.getenv('AWS_DEFAULT_REGION')
+    )
+
+@st.cache_resource
+def setup_dynamodb():
+    return boto3.resource(
+        'dynamodb',
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
         aws_session_token=os.getenv('AWS_SESSION_TOKEN'),
@@ -38,9 +48,27 @@ def store_embedding(text, metadata):
 # Initialize
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 bedrock = setup_bedrock()
+dynamodb = setup_dynamodb()
+table = dynamodb.Table('chatbot_history')
 kb_id = os.getenv("KNOWLEDGE_BASE_ID")
+
+def save_to_dynamodb(session_id, query, response, query_type="general"):
+    try:
+        table.put_item(
+            Item={
+                'session_id': session_id,
+                'timestamp': datetime.now().isoformat(),
+                'query': query,
+                'response': response,
+                'query_type': query_type
+            }
+        )
+    except Exception as e:
+        st.error(f"Database save failed: {e}")
 
 # Display chat history
 for message in st.session_state.messages:
@@ -101,8 +129,6 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                     }
                 )
 
-                #test
-                
                 answer = response['output']['text']
                 # st.write(response['citations'][0]['retrievedReferences'][0]['location'])
                 st.write(answer)
@@ -121,9 +147,27 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                                 s3_uri = location['s3Location']['uri']
                                 st.markdown(f"{i}. {s3_uri}")
                     
+                # Save to DynamoDB
+                citations_text = ""
+                if 'citations' in response and response['citations']:
+                    citations_list = []
+                    for citation in response['citations']:
+                        for ref in citation.get('retrievedReferences', []):
+                            location = ref.get('location', {})
+                            if 'webLocation' in location:
+                                citations_list.append(location['webLocation']['url'])
+                            elif 's3Location' in location:
+                                citations_list.append(location['s3Location']['uri'])
+                    citations_text = " | ".join(citations_list)
+                
+                full_response = answer + (f" [Sources: {citations_text}]" if citations_text else "")
+                save_to_dynamodb(st.session_state.session_id, prompt, full_response, "knowledge_base")
+                
                 # Add to chat history
                 st.session_state.messages.append({"role": "assistant", "content": answer})
   
             except Exception as e:
-                st.error(f"Error: {e}")
+                error_msg = f"Error: {e}"
+                st.error(error_msg)
+                save_to_dynamodb(st.session_state.session_id, prompt, error_msg, "error")
 #.
