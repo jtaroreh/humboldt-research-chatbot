@@ -77,7 +77,7 @@ AWS_SESSION_TOKEN=your_session_token
 AWS_DEFAULT_REGION=us-west-2
 KNOWLEDGE_BASE_ID=your_kb_id
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
-DYNAMODB_TABLE_NAME=chatbot_history
+DYNAMODB_TABLE_NAME=your-dynamodb-table
 ```
 
 ## 📱 Usage
@@ -88,6 +88,7 @@ DYNAMODB_TABLE_NAME=chatbot_history
 - Receive step-by-step guidance for complex processes
 - Access information 24/7 without waiting for staff
 - View source citations from official university resources
+![Chatbot](chatbot.png)
 
 ### Analytics Dashboard (`dashboard.py`)
 - Monitor chat usage metrics and user engagement
@@ -95,6 +96,7 @@ DYNAMODB_TABLE_NAME=chatbot_history
 - Track staff workload reduction through automation
 - Analyze website navigation patterns for improvement
 - Generate reports for research office administration
+![Dashboard](dashboard.png)
 
 ## 🛠️ Components
 
@@ -112,7 +114,6 @@ DYNAMODB_TABLE_NAME=chatbot_history
 - **University-Specific Knowledge**: Trained on Humboldt research website content
 - **Procedure Guidance**: Step-by-step workflows for research processes
 - **Smart Escalation**: Routes complex queries to appropriate staff members
-- **Website Integration**: Seamlessly connects with existing website content
 - **Multi-User Support**: Serves faculty, students, and staff simultaneously
 - **Source Citation**: Links back to official university resources and policies
 
@@ -161,21 +162,18 @@ For questions or issues:
 ## 🎓 Target Users
 
 - **Faculty** - Research funding, compliance, and procedure questions
-- **Graduate Students** - Thesis requirements, IRB processes, and resources
-- **Undergraduate Students** - Research opportunities and application procedures
+- **Students** - Research opportunities and application procedures
 - **Staff** - Administrative processes and policy clarifications
-- **External Researchers** - Collaboration opportunities and contact information
-- **Website Developers** - Analytics insights for website redesign and improvement
-- **Website Developers** - Analytics insights for website redesign and improvement
+- **Developers** - Analytics provided for website improvements
 
 ## 👥 Collaborators
 
-- **[Christiana Razafindrasoa]** - [Role/Contribution]
-- **[Name 2]** - [Role/Contribution]
-- **[Name 3]** - [Role/Contribution]
-- **[Name 4]** - [Role/Contribution]
-- **[Name 5]** - [Role/Contribution]
+- **Christiana Razafindrasoa**
+- **Heaven Nichols** 
+- **Adrian Li** 
+- **Brooklynn Gullickson** 
+- **Joel Taroreh** 
 
 ---
 
-Made with ❤️ for Humboldt State University Research Community
+Made with ❤️ for Humboldt State University Research Community during CCC AI Summer Camp
