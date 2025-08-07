@@ -1,6 +1,8 @@
 import streamlit as st
 import boto3
 import os
+import hashlib
+import numpy as np
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -21,6 +23,16 @@ def setup_bedrock():
         region_name=os.getenv('AWS_DEFAULT_REGION')
     )
 
+# Embedding simulation (for real use, call an embedding model)
+def embed(text):
+    hash_val = hashlib.sha256(text.encode()).digest()
+    return np.frombuffer(hash_val[:128], dtype=np.uint8).astype(np.float32)
+
+# Add embedding to vector store
+def store_embedding(text, metadata):
+    vec = embed(text)
+    st.session_state.clarification_embeddings.append((vec, metadata))
+
 # Initialize
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -33,13 +45,28 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+chat_history_embeddings = []
+
+for message in st.session_state.messages[-6:]:  # or more/less
+    content = message["content"]
+    role = message["role"]
+    metadata = {"role": role, "content": content}
+    vec = embed(content)
+    chat_history_embeddings.append((vec, metadata))
+
+chat_memory_snippets = "\n".join([
+    f"{entry[1]['role'].capitalize()}: {entry[1]['content']}"
+    for entry in chat_history_embeddings
+])
+
+
 # Chat input
 if prompt := st.chat_input("Ask me anything about your documents..."):
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
-    
+
     # Get AI response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
@@ -48,26 +75,29 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                 response = bedrock.retrieve_and_generate(
                     input={
                         'text': (
-                            "You are a helpful assistant. Be conversational and overly friendly. "
-                            "At the end of the response, please ask the user if they have any other questions. "
-                            "Always respond in clear, concise sentences. "
-                            "At the end of the response, ask if the answers provided solved the user's query. "
-                            "Acknowledge the question, and reiterate the user's question in your response. "
-                            "When you use information from the knowledge base, cite it at the end.\n\n"
-                            "You are a task-focused chatbot for a university’s research website. "
-                            "Your primary goal is to help users quickly find the exact resource, "
-                            "service, or page they need related to research at the university. "
-                            "Behavior Guidelines: Always recognize the user's intent from natural language, "
-                            "even if phrased informally or vaguely (e.g., 'funding stuff,' 'join a lab,' 'IRB form,'"
-                            "'I need help with a grant'). If the intent is clear, respond with a concise, actionable reply "
-                            "that includes a direct button, link, or next step (e.g., “Visit this page to apply: "
-                            "Apply for Undergraduate Research”). If the intent is ambiguous, offer clear multiple-choice "
-                            "options or ask a brief clarifying question. Avoid unnecessary filler text. No greetings or small "
-                            "talk unless the user initiates it. Never give broad summaries of topics. Instead, route users to "
-                            "specific destinations or ask questions that reduce ambiguity. When possible, match vague queries to "
-                            "known university research services, documents, or programs. Tone: Helpful, efficient, and professional. "
-                            "Like a university help desk that knows exactly where everything is."
-                            f"User question: {prompt}"
+                            f"""CHAT HISTORY: {chat_history_embeddings}\n
+                            You are a helpful assistant. Be conversational and overly friendly. 
+                            At the end of the response, please provide the user with however many suggestions to elicit more actionable replies that relevant to the original query.
+                            Always respond in clear, concise sentences. 
+                            Acknowledge the question, and reiterate the user's question in your response. 
+                            When you use information from the knowledge base, cite it at the end.\n\n
+                            You are a task-focused chatbot for a university's research website. 
+                            Your primary goal is to help users quickly find the exact resource, service, or page they need related to research at the university. 
+                            
+                            Behavior Guidelines: 
+                            -Always recognize the user's intent from natural language, even if phrased informally or vaguely (e.g., 'funding stuff,' 'join a lab,' 'IRB form, 'I need help with a grant'). 
+                            -If the intent is clear, respond with a concise, actionable reply that includes a direct button, link, or next step (e.g., “Visit this page to apply: Apply for Undergraduate Research”). 
+                            -If the intent is ambiguous, offer clear multiple-choice options or ask a brief clarifying question. 
+                            -Avoid unnecessary filler text. No greetings or small talk unless the user initiates it. 
+                            -Never give broad summaries of topics. Instead, route users to 
+                            specific destinations or ask questions that reduce ambiguity. 
+                            -When possible, match vague queries to known university research services, documents, or programs. 
+                            
+                            Tone: 
+                            -Helpful, efficient, and professional. 
+                            -Like a university help desk that knows exactly where everything is.
+
+                            \nUser question: {prompt}"""
                         )
                     },
                     retrieveAndGenerateConfiguration={
@@ -101,6 +131,7 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                     
                 # Add to chat history
                 st.session_state.messages.append({"role": "assistant", "content": answer})
-                
+  
             except Exception as e:
                 st.error(f"Error: {e}")
+#.
