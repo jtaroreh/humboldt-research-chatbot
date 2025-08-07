@@ -165,6 +165,16 @@ For questions or issues:
 - **Undergraduate Students** - Research opportunities and application procedures
 - **Staff** - Administrative processes and policy clarifications
 - **External Researchers** - Collaboration opportunities and contact information
+- **Website Developers** - Analytics insights for website redesign and improvement
+- **Website Developers** - Analytics insights for website redesign and improvement
+
+## 👥 Collaborators
+
+- **[Christiana Razafindrasoa]** - [Role/Contribution]
+- **[Name 2]** - [Role/Contribution]
+- **[Name 3]** - [Role/Contribution]
+- **[Name 4]** - [Role/Contribution]
+- **[Name 5]** - [Role/Contribution]
 
 ---
 
