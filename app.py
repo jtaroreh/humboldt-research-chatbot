@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+
 # Setup
 st.set_page_config(page_title="Simple RAG Chatbot", page_icon="🤖")
 st.title("Simple RAG Chatbot")
@@ -75,31 +77,6 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                 response = bedrock.retrieve_and_generate(
                     input={
                         'text': (
-<<<<<<< HEAD
-                            f"""CHAT HISTORY: {chat_history_embeddings}\n
-                            You are a helpful assistant. Be conversational and overly friendly. 
-                            At the end of the response, please provide the user with however many suggestions to elicit more actionable replies that relevant to the original query.
-                            Always respond in clear, concise sentences. 
-                            Acknowledge the question, and reiterate the user's question in your response. 
-                            When you use information from the knowledge base, cite it at the end.\n\n
-                            You are a task-focused chatbot for a university's research website. 
-                            Your primary goal is to help users quickly find the exact resource, service, or page they need related to research at the university. 
-                            
-                            Behavior Guidelines: 
-                            -Always recognize the user's intent from natural language, even if phrased informally or vaguely (e.g., 'funding stuff,' 'join a lab,' 'IRB form, 'I need help with a grant'). 
-                            -If the intent is clear, respond with a concise, actionable reply that includes a direct button, link, or next step (e.g., “Visit this page to apply: Apply for Undergraduate Research”). 
-                            -If the intent is ambiguous, offer clear multiple-choice options or ask a brief clarifying question. 
-                            -Avoid unnecessary filler text. No greetings or small talk unless the user initiates it. 
-                            -Never give broad summaries of topics. Instead, route users to 
-                            specific destinations or ask questions that reduce ambiguity. 
-                            -When possible, match vague queries to known university research services, documents, or programs. 
-                            
-                            Tone: 
-                            -Helpful, efficient, and professional. 
-                            -Like a university help desk that knows exactly where everything is.
-
-                            \nUser question: {prompt}"""
-=======
                             f"CHAT HISTORY: {chat_history_embeddings}\n"
                             "You are a helpful assistant. Be conversational and overly friendly. "
                             #"At the end of the response, please ask the user if they have any other questions."
@@ -113,7 +90,6 @@ if prompt := st.chat_input("Ask me anything about your documents..."):
                             "When you use information from the knowledge base, cite it at the end.\n\n"
                             "Suggest alternate contact details if applicable."
                             f"User question: {prompt}"
->>>>>>> b28ca9b (v1 with memory and prompt)
                         )
                     },
                     retrieveAndGenerateConfiguration={
