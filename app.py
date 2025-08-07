@@ -12,7 +12,10 @@ load_dotenv()
 
 # Setup
 st.set_page_config(page_title="Lucky the Lumberjack Chatbot", page_icon="🪓")
-st.title("Lucky the Lumberjack Chatbot")
+
+# Main content area
+st.markdown('<div class="main-content">', unsafe_allow_html=True)
+st.title("🪓 Lucky the Lumberjack Chatbot")
 
 # AWS Setups
 @st.cache_resource
@@ -45,17 +48,33 @@ def store_embedding(text, metadata):
     vec = embed(text)
     st.session_state.clarification_embeddings.append((vec, metadata))
 
-# Function to get emoji for different message types
-def get_emoji_for_message(message_type):
-    emoji_map = {
-        "user": "🙋‍♀️",  # User talking
-        "greeting": "🌲",  # Lucky intro energy
-        "bot": "🧠",  # Smart/helpful answer
-        "thinking": "🤔",  # Suspense & charm
-        "error": "😵",  # Bot brain fart moment
-        "fun_extra": "🦫"  # Lucky's woodland cousin
-    }
-    return emoji_map.get(message_type, "💬")
+# Function to get dynamic emoji based on message content
+def get_message_emoji(content, role):
+    import random
+    
+    if role == "user":
+        # Simple user emojis
+        user_emojis = ["🤔", "🙋", "❓", "🧐", "💭"]
+        return random.choice(user_emojis)
+    
+    # Assistant emojis based on content
+    content_lower = content.lower()
+    
+    # Greeting responses
+    if any(word in content_lower for word in ["good morning", "good afternoon", "good evening", "hello", "hi"]):
+        return random.choice(["🌲", "😊", "👋"])
+    
+    # Error responses
+    elif "error" in content_lower:
+        return "😵"
+    
+    # Excited responses
+    elif any(word in content_lower for word in ["yes!", "great", "excellent", "wonderful"]):
+        return random.choice(["🎉", "⭐", "🔥"])
+    
+    # Default helpful emojis
+    else:
+        return random.choice(["🧠", "📚", "💡", "🎯"])
 
 # Function to get time-based greeting
 def get_greeting():
@@ -100,20 +119,8 @@ def save_to_dynamodb(session_id, query, response, query_type="general"):
 
 # Display chat history
 for message in st.session_state.messages:
-    # Determine avatar emoji based on message content
-    if message["role"] == "user":
-        avatar_emoji = get_emoji_for_message("user")
-    else:
-        # Check message content to determine bot emoji type
-        content = message["content"]
-        if "Good morning" in content or "Good afternoon" in content or "Good evening" in content:
-            avatar_emoji = get_emoji_for_message("greeting")
-        elif "Error:" in content:
-            avatar_emoji = get_emoji_for_message("error")
-        else:
-            avatar_emoji = get_emoji_for_message("bot")
-    
-    with st.chat_message(message["role"], avatar=avatar_emoji):
+    emoji = get_message_emoji(message["content"], message["role"])
+    with st.chat_message(message["role"], avatar=emoji):
         st.write(message["content"])
 
 chat_history_embeddings = []
@@ -146,8 +153,9 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                 break
     
     if needs_response:
-        with st.chat_message("assistant", avatar=get_emoji_for_message("bot")):
-            with st.spinner(f"{get_emoji_for_message('thinking')} Thinking..."):
+        assistant_emoji = get_message_emoji(answer if 'answer' in locals() else "thinking", "assistant")
+        with st.chat_message("assistant", avatar=assistant_emoji):
+            with st.spinner("🤔 Thinking..."):
                 try:
                     # Call Bedrock Knowledge Base
                     response = bedrock.retrieve_and_generate(
@@ -181,33 +189,54 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                     answer = response['output']['text']
                     st.write(answer)
 
-                    # Sources
+                    # Sources - each link on its own line (always show at least one)
+                    st.markdown("**📚 Sources:**")
+                    has_links = False
                     if 'citations' in response and response['citations']:
-                        st.markdown("**📚 Sources:**")
-                        for i, citation in enumerate(response['citations'], 1):
-                            for ref in citation.get('retrievedReferences', []):
-                                location = ref.get('location', {})
-                                if 'webLocation' in location:
-                                    url = location['webLocation']['url']
-                                    st.markdown(f"• [{url}]({url})")
-                                elif 's3Location' in location:
-                                    s3_uri = location['s3Location']['uri']
-                                    st.markdown(f"• {s3_uri}")
-                        
-                    # Save to DynamoDB
-                    citations_text = ""
-                    if 'citations' in response and response['citations']:
-                        citations_list = []
                         for citation in response['citations']:
                             for ref in citation.get('retrievedReferences', []):
                                 location = ref.get('location', {})
                                 if 'webLocation' in location:
-                                    citations_list.append(location['webLocation']['url'])
+                                    url = location['webLocation']['url']
+                                    st.markdown(f"[{url}]({url})")
+                                    st.markdown("")
+                                    has_links = True
                                 elif 's3Location' in location:
-                                    citations_list.append(location['s3Location']['uri'])
-                        citations_text = " | ".join(citations_list)
+                                    s3_uri = location['s3Location']['uri']
+                                    st.markdown(f"{s3_uri}")
+                                    st.markdown("")
+                                    has_links = True
                     
-                    full_response = answer + (f" [Sources: {citations_text}]" if citations_text else "")
+                    # If no links found, provide default link
+                    if not has_links:
+                        st.markdown("[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)")
+                        st.markdown("")
+                    
+                    # Build sources for storage and display
+                    sources_for_storage = "\n\n**📚 Sources:**\n\n"
+                    if 'citations' in response and response['citations']:
+                        unique_sources = set()
+                        for citation in response['citations']:
+                            for ref in citation.get('retrievedReferences', []):
+                                location = ref.get('location', {})
+                                if 'webLocation' in location:
+                                    unique_sources.add(location['webLocation']['url'])
+                                elif 's3Location' in location:
+                                    unique_sources.add(location['s3Location']['uri'])
+                        
+                        if unique_sources:
+                            for source in sorted(unique_sources):
+                                if source.startswith('http'):
+                                    sources_for_storage += f"[{source}]({source})\n\n"
+                                else:
+                                    sources_for_storage += f"{source}\n\n"
+                        else:
+                            sources_for_storage += "[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)\n\n"
+                    else:
+                        sources_for_storage += "[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)\n\n"
+                    
+                    # Save to DynamoDB
+                    full_response = answer + sources_for_storage
                     save_to_dynamodb(st.session_state.session_id, last_message, full_response, "knowledge_base")
                     
                     # Extract suggested questions from the response
@@ -235,38 +264,44 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                                   len(clean_question) > 20):
                                 suggested_questions.append(clean_question)
                     
-                    # If no intelligent questions found, generate topic-specific ones based on the user's question
+                    # If no intelligent questions found, generate topic-specific ones based on knowledge base content
                     if not suggested_questions:
                         user_question_lower = last_message.lower()
-                        if 'research' in user_question_lower:
+                        if 'research' in user_question_lower or 'grant' in user_question_lower:
                             suggested_questions = [
-                                "What funding opportunities are available for research?",
-                                "How do I apply for research grants?",
-                                "Where can I find research collaboration opportunities?"
+                                "What is the Sponsored Programs Foundation?",
+                                "How do I contact the research office?",
+                                "What are the indirect cost rates?"
                             ]
-                        elif 'employment' in user_question_lower or 'job' in user_question_lower:
+                        elif 'employment' in user_question_lower or 'job' in user_question_lower or 'faculty' in user_question_lower:
                             suggested_questions = [
-                                "What are the application requirements for faculty positions?",
-                                "How do I submit my application materials?",
-                                "When are the application deadlines?"
+                                "What are the faculty employment policies?",
+                                "How do I find contact information for HR?",
+                                "What benefits are available to employees?"
                             ]
-                        elif 'compliance' in user_question_lower:
+                        elif 'compliance' in user_question_lower or 'audit' in user_question_lower:
                             suggested_questions = [
-                                "What are the reporting requirements?",
-                                "How do I ensure I'm meeting all compliance standards?",
-                                "Where can I find the compliance checklist?"
+                                "What are the audit requirements?",
+                                "How do I access financial reports?",
+                                "What compliance policies should I know about?"
                             ]
                         elif 'forms' in user_question_lower or 'documents' in user_question_lower:
                             suggested_questions = [
-                                "How do I submit completed forms?",
-                                "What documents do I need to provide?",
-                                "Where can I get help filling out forms?"
+                                "Where can I find the forms library?",
+                                "What documents are required for proposals?",
+                                "How do I access administrative policies?"
+                            ]
+                        elif 'board' in user_question_lower or 'governance' in user_question_lower:
+                            suggested_questions = [
+                                "Who are the board members?",
+                                "What are the board meeting schedules?",
+                                "How does the foundation governance work?"
                             ]
                         else:
                             suggested_questions = [
-                                "What are the next steps I should take?",
-                                "How do I get more specific information about this topic?",
-                                "Where can I find additional resources?"
+                                "What services does the foundation provide?",
+                                "How can I contact the foundation?",
+                                "What are the foundation's policies?"
                             ]
                     
                     st.session_state.suggested_questions = suggested_questions[:3]  # Limit to 3
@@ -292,7 +327,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                                     sources_for_storage += f"{source}\n\n"
                     
                     # Add to chat history with sources
-                    st.session_state.messages.append({"role": "assistant", "content": answer + sources_for_storage})
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
                     st.rerun()
       
                 except Exception as e:
@@ -306,12 +341,13 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 if prompt := st.chat_input("How can I help you today?"):
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar=get_emoji_for_message("user")):
+    user_emoji = get_message_emoji(prompt, "user")
+    with st.chat_message("user", avatar=user_emoji):
         st.write(prompt)
 
     # Get AI response
-    with st.chat_message("assistant", avatar=get_emoji_for_message("bot")):
-        with st.spinner(f"{get_emoji_for_message('thinking')} Thinking..."):
+    with st.chat_message("assistant", avatar="🧠"):
+        with st.spinner("🤔 Thinking..."):
             try:
                 # Call Bedrock Knowledge Base
                 response = bedrock.retrieve_and_generate(
@@ -319,9 +355,7 @@ if prompt := st.chat_input("How can I help you today?"):
                         'text': (
                             f"CHAT HISTORY: {chat_history_embeddings}\n"
                             "You are a helpful assistant. Be conversational and overly friendly. "
-                            #"At the end of the response, please ask the user if they have any other questions."
                             "Always respond in clear, concise sentences. "
-                            #"At the end of the response, ask if the answers provided solved the user's query. "
                             "Acknowledge the question, and reiterate the user's question in your response. "
                             "In your response, break down the steps to solve the user's problem in a structured step by step workflow"
                             "If the user asks more than one question, please ask the user to prioritize the most important question and to answer that one first"
@@ -345,37 +379,56 @@ if prompt := st.chat_input("How can I help you today?"):
                 )
 
                 answer = response['output']['text']
-                # st.write(response['citations'][0]['retrievedReferences'][0]['location'])
                 st.write(answer)
-                # st.write(response['citations'][0]['retrievedReferences'][0]['location']['webLocation']['url'])
 
-                # Sources
+                # Sources - each link on its own line (always show at least one)
+                st.markdown("**📚 Sources:**")
+                has_links = False
                 if 'citations' in response and response['citations']:
-                    st.markdown("**📚 Sources:**")
-                    for i, citation in enumerate(response['citations'], 1):
-                        for ref in citation.get('retrievedReferences', []):
-                            location = ref.get('location', {})
-                            if 'webLocation' in location:
-                                url = location['webLocation']['url']
-                                st.markdown(f"• [{url}]({url})")
-                            elif 's3Location' in location:
-                                s3_uri = location['s3Location']['uri']
-                                st.markdown(f"• {s3_uri}")
-                    
-                # Save to DynamoDB
-                citations_text = ""
-                if 'citations' in response and response['citations']:
-                    citations_list = []
                     for citation in response['citations']:
                         for ref in citation.get('retrievedReferences', []):
                             location = ref.get('location', {})
                             if 'webLocation' in location:
-                                citations_list.append(location['webLocation']['url'])
+                                url = location['webLocation']['url']
+                                st.markdown(f"[{url}]({url})")
+                                st.markdown("")
+                                has_links = True
                             elif 's3Location' in location:
-                                citations_list.append(location['s3Location']['uri'])
-                    citations_text = " | ".join(citations_list)
+                                s3_uri = location['s3Location']['uri']
+                                st.markdown(f"{s3_uri}")
+                                st.markdown("")
+                                has_links = True
                 
-                full_response = answer + (f" [Sources: {citations_text}]" if citations_text else "")
+                # If no links found, provide default link
+                if not has_links:
+                    st.markdown("[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)")
+                    st.markdown("")
+                
+                # Build sources for storage and display
+                sources_for_storage = "\n\n**📚 Sources:**\n\n"
+                if 'citations' in response and response['citations']:
+                    unique_sources = set()
+                    for citation in response['citations']:
+                        for ref in citation.get('retrievedReferences', []):
+                            location = ref.get('location', {})
+                            if 'webLocation' in location:
+                                unique_sources.add(location['webLocation']['url'])
+                            elif 's3Location' in location:
+                                unique_sources.add(location['s3Location']['uri'])
+                    
+                    if unique_sources:
+                        for source in sorted(unique_sources):
+                            if source.startswith('http'):
+                                sources_for_storage += f"[{source}]({source})\n\n"
+                            else:
+                                sources_for_storage += f"{source}\n\n"
+                    else:
+                        sources_for_storage += "[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)\n\n"
+                else:
+                    sources_for_storage += "[Visit Cal Poly Humboldt Sponsored Programs Foundation](https://research.humboldt.edu/)\n\n"
+                
+                # Save to DynamoDB and add to chat history
+                full_response = answer + sources_for_storage
                 save_to_dynamodb(st.session_state.session_id, prompt, full_response, "knowledge_base")
                 
                 # Extract suggested questions from the response
@@ -403,38 +456,44 @@ if prompt := st.chat_input("How can I help you today?"):
                               len(clean_question) > 20):
                             suggested_questions.append(clean_question)
                 
-                # If no intelligent questions found, generate topic-specific ones based on the user's question
+                # If no intelligent questions found, generate topic-specific ones based on knowledge base content
                 if not suggested_questions:
                     user_question_lower = prompt.lower()
-                    if 'research' in user_question_lower:
+                    if 'research' in user_question_lower or 'grant' in user_question_lower:
                         suggested_questions = [
-                            "What funding opportunities are available for research?",
-                            "How do I apply for research grants?",
-                            "Where can I find research collaboration opportunities?"
+                            "What is the Sponsored Programs Foundation?",
+                            "How do I contact the research office?",
+                            "What are the indirect cost rates?"
                         ]
-                    elif 'employment' in user_question_lower or 'job' in user_question_lower:
+                    elif 'employment' in user_question_lower or 'job' in user_question_lower or 'faculty' in user_question_lower:
                         suggested_questions = [
-                            "What are the application requirements for faculty positions?",
-                            "How do I submit my application materials?",
-                            "When are the application deadlines?"
+                            "What are the faculty employment policies?",
+                            "How do I find contact information for HR?",
+                            "What benefits are available to employees?"
                         ]
-                    elif 'compliance' in user_question_lower:
+                    elif 'compliance' in user_question_lower or 'audit' in user_question_lower:
                         suggested_questions = [
-                            "What are the reporting requirements?",
-                            "How do I ensure I'm meeting all compliance standards?",
-                            "Where can I find the compliance checklist?"
+                            "What are the audit requirements?",
+                            "How do I access financial reports?",
+                            "What compliance policies should I know about?"
                         ]
                     elif 'forms' in user_question_lower or 'documents' in user_question_lower:
                         suggested_questions = [
-                            "How do I submit completed forms?",
-                            "What documents do I need to provide?",
-                            "Where can I get help filling out forms?"
+                            "Where can I find the forms library?",
+                            "What documents are required for proposals?",
+                            "How do I access administrative policies?"
+                        ]
+                    elif 'board' in user_question_lower or 'governance' in user_question_lower:
+                        suggested_questions = [
+                            "Who are the board members?",
+                            "How do I contact board members?",
+                            "What are the board meeting schedules?"
                         ]
                     else:
                         suggested_questions = [
-                            "What are the next steps I should take?",
-                            "How do I get more specific information about this topic?",
-                            "Where can I find additional resources?"
+                            "What services does the foundation provide?",
+                            "How can I contact the foundation?",
+                            "What are the foundation's policies?"
                         ]
                 
                 st.session_state.suggested_questions = suggested_questions[:3]  # Limit to 3
@@ -460,7 +519,7 @@ if prompt := st.chat_input("How can I help you today?"):
                                 sources_for_storage += f"{source}\n\n"
                 
                 # Add to chat history with sources
-                st.session_state.messages.append({"role": "assistant", "content": answer + sources_for_storage})
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
   
             except Exception as e:
                 error_msg = f"Error: {e}"
@@ -481,8 +540,8 @@ if len(st.session_state.messages) == 1:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔬 Research", key="suggest1"):
-            st.session_state.messages.append({"role": "user", "content": "What research opportunities are available?"})
+        if st.button("🔬 Research Programs", key="suggest1"):
+            st.session_state.messages.append({"role": "user", "content": "What research programs does the Sponsored Programs Foundation support?"})
             st.rerun()
 
     with col2:
@@ -512,3 +571,6 @@ if len(st.session_state.messages) == 1:
         if st.button("🏢 Board", key="suggest6"):
             st.session_state.messages.append({"role": "user", "content": "What board information is available?"})
             st.rerun()
+
+# Close main content div
+st.markdown('</div>', unsafe_allow_html=True)
