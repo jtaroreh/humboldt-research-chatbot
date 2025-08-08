@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>humboldt research chatbot</title>
+  <style>
+    /* --- Base Styling --- */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      overflow: hidden; /* Kept to prevent full page scroll, maintaining fixed background */
+      background: radial-gradient(circle at center, #1a1a1a, #0d0d0d);
+      color: white;
+    }
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh; /* Make container full height */
+      position: relative; /* Changed to relative for absolute child positioning */
+      z-index: 2;
+      padding: 1em 2em 2em 2em;
+      box-sizing: border-box; /* Include padding in height calculation */
+    }
+
+    /* --- Title is now absolutely positioned --- */
+    #mainTitle {
+      position: absolute;
+      top: 1.5em; /* Position from the top of chat-container */
+      left: 50%; /* Center horizontally */
+      transform: translateX(-50%); /* Fine-tune centering */
+      z-index: 10; /* Ensure it's above the chat box content */
+      max-width: 500px;
+      width: 90%; /* Use percentage for responsiveness within padding */
+      height: auto;
+      transition: opacity 0.4s ease-out; /* Only transition opacity */
+      opacity: 1;
+    }
+
+    /* --- Hidden class is simpler --- */
+    #mainTitle.hidden {
+      opacity: 0;
+      pointer-events: none; /* Invisible title doesn't block mouse */
+    }
+
+    /* --- MODIFIED: Chat-box has increased top padding --- */
+    .chat-box {
+      flex-grow: 1; /* Allow chat box to fill available space */
+      max-width: 800px;
+      width: 100%;
+      margin: 0 auto;
+      background: rgba(0,0,0,0.5);
+      padding: 160px 1em 1em 1em; /* INCREASED top padding to make more space for the title */
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+      overflow-y: overlay;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .message {
+      margin: 1em 0;
+    }
+    .user {
+      font-weight: bold;
+      white-space: pre-wrap;
+      color: #00ffcc;
+    }
+    .assistant {
+      color: #66aaff;
+      white-space: pre-wrap;
+    }
+    .sources {
+      font-size: 0.9em;
+      color: gray;
+      margin-top: 0.5em;
+    }
+    form {
+      margin-top: 1em;
+      display: flex;
+      justify-content: center;
+      gap: 0.5em;
+      max-width: 800px;
+      width: 100%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    input {
+      width: 80%;
+      padding: 0.5em;
+      border-radius: 8px;
+      background-color: rgba(0, 0, 0, 0.4);
+      color: #00ffcc;
+      outline: none;
+      font-family: inherit;
+      font-size: 1em;
+      transition: all 0.3s ease-out;
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      caret-color: #00ffcc;
+    }
+    input::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+    input:focus {
+      border-color: #00ffcc;
+      box-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+    }
+    button {
+      padding: 0.5em 1em;
+      border-radius: 8px;
+      border: none;
+      background: #00ffcc;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #00cc99;
+    }
+    .chat-box::-webkit-scrollbar {
+        width: 2px;
+        transition: width 0.2s ease-in-out;
+    }
+    .chat-box::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .chat-box::-webkit-scrollbar-thumb {
+        background: rgba(0, 255, 204, 0.5);
+        border-radius: 10px;
+    }
+    .chat-box.scrolling::-webkit-scrollbar,
+    .chat-box::-webkit-scrollbar:hover {
+        width: 12px;
+    }
+    .chat-box.scrolling::-webkit-scrollbar-thumb,
+    .chat-box::-webkit-scrollbar-thumb:hover {
+        background: #00ffcc;
+    }
+    #particleCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .suggestions-container {
+        max-width: 800px;
+        width: 100%;
+        margin: 1em auto 0 auto;
+        text-align: center;
+    }
+    .suggestion-btn {
+        background-color: rgba(0, 255, 204, 0.1);
+        border: 1px solid rgba(0, 255, 204, 0.3);
+        color: #00ffcc;
+        padding: 0.5em 1em;
+        margin: 0.25em;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .suggestion-btn:hover {
+        background-color: rgba(0, 255, 204, 0.3);
+        border-color: #00ffcc;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div class="chat-container">
+    <img src="{{ url_for('static', filename='title.png') }}" alt="Humboldt Research Chatbot" id="mainTitle">
+    
+    <div class="chat-box" id="chatBox"></div>
+    <div class="suggestions-container" id="suggestionsContainer"></div>
+    <form id="chatForm">
+      <input type="text" id="messageInput" placeholder="ask me anything..." required />
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <script src="https://unpkg.com/event-source-polyfill/src/eventsource.min.js"></script>
+  <script>
+    const chatBox = document.getElementById("chatBox");
+    const chatForm = document.getElementById("chatForm");
+    const messageInput = document.getElementById("messageInput");
+    const suggestionsContainer = document.getElementById("suggestionsContainer");
+    const history = [];
+
+    // --- Title scroll effect logic ---
+    const mainTitle = document.getElementById("mainTitle");
+    let isTitleVisible = true;
+    chatBox.addEventListener('scroll', () => {
+      // The logic is the same, but the effect is now just a fade
+      if (chatBox.scrollTop > 30 && isTitleVisible) {
+        mainTitle.classList.add('hidden');
+        isTitleVisible = false;
+      } else if (chatBox.scrollTop <= 30 && !isTitleVisible) {
+        mainTitle.classList.remove('hidden');
+        isTitleVisible = true;
+      }
+    });
+
+    // --- Reactive scrollbar logic ---
+    let scrollTimeout;
+    chatBox.addEventListener('scroll', () => {
+        chatBox.classList.add('scrolling');
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            chatBox.classList.remove('scrolling');
+        }, 1200);
+    });
+
+
+    // --- Message Display Logic ---
+    function appendMessage(role, content) {
+        const div = document.createElement("div");
+        div.className = "message " + role;
+        div.innerHTML = `<div class="${role}"><strong>${role}:</strong> ${content.replace(/\n/g, "<br>")}</div>`;
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return div;
+    }
+    
+    // --- Main Message Sending Function ---
+    async function sendMessage(message) {
+        if (message === null && !messageInput.value.trim()) return;
+        
+        const messageToSend = message === null ? messageInput.value.trim() : message;
+        if (!messageToSend) return;
+
+        appendMessage("user", messageToSend);
+        history.push({ role: "user", content: messageToSend });
+        messageInput.value = "";
+        suggestionsContainer.innerHTML = '';
+
+        const thinkingDiv = document.createElement("div");
+        thinkingDiv.className = "message assistant thinking";
+        thinkingDiv.innerHTML = `<div class="assistant"><strong>assistant:</strong> Thinking...</div>`;
+        chatBox.appendChild(thinkingDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        let answerText = "";
+        let sourcesList = [];
+        let suggestionsList = [];
+        let errorContent = "";
+
+        try {
+            const res = await fetch("http://127.0.0.1:5000/chat/stream", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: messageToSend, history })
+            });
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split("\n\n");
+
+                for (let line of lines) {
+                    if (line.startsWith("data: ")) {
+                        const dataStr = line.slice(6).trim();
+                        if (dataStr === "[DONE]") continue;
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (data.type === 'answer') {
+                                answerText = data.content;
+                            } else if (data.type === 'sources') {
+                                sourcesList = data.content;
+                            } else if (data.type === 'suggestions') {
+                                suggestionsList = data.content;
+                            } else if (data.type === 'error') {
+                                errorContent = data.content;
+                            }
+                        } catch (e) { /* ignore parsing errors */ }
+                    }
+                }
+            }
+        } catch (err) {
+            errorContent = "Failed to connect to the server. Please try again later.";
+        }
+
+        const thinkingMessage = document.querySelector(".message.assistant.thinking");
+        if (thinkingMessage) thinkingMessage.remove();
+
+        if (errorContent) {
+            appendMessage("assistant", errorContent);
+            return;
+        }
+
+        if (suggestionsList.length > 0) {
+            displaySuggestions(suggestionsList);
+        }
+
+        const assistantMessageDiv = appendMessage("assistant", "");
+        const contentDiv = assistantMessageDiv.querySelector('.assistant');
+        contentDiv.innerHTML = `<strong>assistant:</strong> `;
+
+        let i = 0;
+        function typeWriter() {
+            if (i < answerText.length) {
+                const char = answerText[i];
+                contentDiv.innerHTML += char === '\n' ? '<br>' : char;
+                i++;
+                chatBox.scrollTop = chatBox.scrollHeight;
+                setTimeout(typeWriter, 3);
+            } else {
+                if (sourcesList.length > 0) {
+                    const srcDiv = document.createElement("div");
+                    srcDiv.className = "sources";
+                    srcDiv.innerHTML = "Sources: " + sourcesList.map(url => `<a href="${url}" target="_blank">${url}</a>`).join(" | ");
+                    assistantMessageDiv.appendChild(srcDiv);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+                history.push({ role: "assistant", content: answerText });
+            }
+        }
+        typeWriter();
+    }
+
+    chatForm.onsubmit = (e) => {
+        e.preventDefault();
+        sendMessage(null);
+    };
+
+    function displaySuggestions(suggestions) {
+        suggestionsContainer.innerHTML = '';
+        const title = document.createElement('p');
+        title.innerHTML = history.length > 0 ? '<strong>You might also want to ask:</strong>' : '<strong>🏛️ Explore Topics:</strong>';
+        suggestionsContainer.appendChild(title);
+
+        suggestions.forEach(q => {
+            const btn = document.createElement("button");
+            btn.className = "suggestion-btn";
+            btn.innerText = q;
+            btn.onclick = () => {
+                sendMessage(q);
+            };
+            suggestionsContainer.appendChild(btn);
+        });
+    }
+
+    async function getInitialSuggestions() {
+        try {
+             const res = await fetch("http://127.0.0.1:5000/chat/stream", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: "", history: [] })
+            });
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            const { value } = await reader.read();
+            const chunk = decoder.decode(value);
+            const lines = chunk.split("\n\n");
+            for (let line of lines) {
+                if (line.startsWith("data: ")) {
+                    const dataStr = line.slice(6).trim();
+                     if (dataStr === "[DONE]") continue;
+                    const data = JSON.parse(dataStr);
+                    if (data.type === 'suggestions') {
+                        displaySuggestions(data.content);
+                        break;
+                    }
+                }
+            }
+        } catch(e) {
+            console.error("Could not fetch initial suggestions", e);
+        }
+    }
+
+    window.onload = () => {
+        getInitialSuggestions();
+    };
+
+  </script>
+
+  <script>
+    // --- Particle Animation (no changes) ---
+    const canvas = document.getElementById("particleCanvas");
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    const numParticles = 250;
+    const colors = ['#ffbe0b', '#fb5607', '#ff006e', '#8338ec', '#3a86ff'];
+    let mouse = { x: null, y: null };
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    for (let i = 0; i < numParticles; i++) {
+      const homeX = Math.random() * canvas.width;
+      const homeY = Math.random() * canvas.height;
+      particles.push({
+        x: homeX, y: homeY, homeX: homeX, homeY: homeY,
+        size: Math.random() * 3 + 1,
+        speedX: (Math.random() - 0.5) * 1.5,
+        speedY: (Math.random() - 0.5) * 1.5,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+
+    window.addEventListener("mousemove", e => {
+      mouse.x = e.x;
+      mouse.y = e.y;
+    });
+
+    window.addEventListener("mouseout", () => {
+        mouse.x = null;
+        mouse.y = null;
+    });
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach(p => {
+        const homeDX = p.homeX - p.x;
+        const homeDY = p.homeY - p.y;
+        p.speedX += homeDX * 0.0001;
+        p.speedY += homeDY * 0.0001;
+
+        if (mouse.x !== null) {
+          const setLength = 100;
+          const interactionRadius = 250;
+          const dx = mouse.x - p.x;
+          const dy = mouse.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > setLength && dist < interactionRadius) {
+            p.speedX += dx * 0.002;
+            p.speedY += dy * 0.002;
+          }
+        }
+
+        p.speedX *= 0.98;
+        p.speedY *= 0.98;
+        p.x += p.speedX;
+        p.y += p.speedY;
+
+        if (p.x < 0 || p.x > canvas.width) {
+            p.speedX *= -1;
+            p.x = Math.max(0, Math.min(canvas.width, p.x));
+        }
+        if (p.y < 0 || p.y > canvas.height) {
+            p.speedY *= -1;
+            p.y = Math.max(0, Math.min(canvas.height, p.y));
+        }
+
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      if (mouse.x !== null) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+        ctx.lineWidth = 1;
+        particles.forEach(p => {
+          const dx = p.x - mouse.x;
+          const dy = p.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 250) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+          }
+        });
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
